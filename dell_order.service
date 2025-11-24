@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=/srv/Dell_OrderStatus_API/Dell_API_OrderStatus
-ExecStart=/srv/Dell_OrderStatus_API/Dell_API_OrderStatus/.venv/bin/python /srv/Dell_OrderStatus_API/Dell_API_OrderStatus/app.py
+ExecStart=/srv/Dell_OrderStatus_API/.venv/bin/python /srv/Dell_OrderStatus_API/Dell_API_OrderStatus/app.py
 User=dell_order
 Group=dell_order
 Type=idle
