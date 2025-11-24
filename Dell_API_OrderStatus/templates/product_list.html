@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주간 입고 내역 조회</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/5.11.3/main.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/5.11.3/main.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+	
+</head>
+<body>
+    <div class="container mt-5">
+
+	<div class="text-right mb-3">
+	<button class="btn btn-primary" id="filter-all">📦 모든 제품 조회</button>
+	<button class="btn btn-success" id="filter-shipped">✅ 출고 제품 조회</button>
+    <button class="btn btn-warning" id="filter-unshipped">🚚 미출고 제품 조회</button>
+</div>
+
+
+	<h2 class="mb-4">🔍 입고 장비 찾기</h2>
+	<form id="search-form" method="GET" action="/search">
+    <div class="form-group">
+    <label for="search-field">검색 필드 선택:</label>
+    <select id="search-field" name="field" class="form-control" style="width: 200px;">
+        <option value="purchase_order_number" {% if selected_field == 'purchase_order_number' %}selected{% endif %}>구매 주문 번호</option>
+        <option value="order_number" {% if selected_field == 'order_number' %}selected{% endif %}>Dell 주문 번호</option>
+        <option value="product_description" {% if selected_field == 'product_description' %}selected{% endif %}>제품 설명</option>
+    </select>
+</div>
+
+    <div class="form-group">
+    <label for="search-value">검색 값:</label>
+    <div class="d-flex">
+        <input type="text" id="search-value" name="value" class="form-control" style="width: 200px;" 
+               placeholder="검색할 값을 입력하세요" value="{{ search_value }}">
+        <button type="submit" class="btn btn-primary ml-2">검색</button>
+    </div>
+    <small id="search-warning" class="text-danger" style="display: none;">⚠ 검색 값을 입력하세요.</small> <!-- ✅ 경고 메시지 -->
+</div>
+
+
+
+</form>
+
+    </form>
+		<br>
+        <h2 class="mb-4">📅 주간 입고 내역 조회</h2>
+        
+        <div class="form-group">
+            <label for="manual-date">날짜 입력:</label>
+            <input type="date" id="manual-date" class="form-control d-inline-block" style="width: 150px;">
+            <button class="btn btn-primary ml-2" onclick="fetchOrdersByDate()">조회</button>
+        </div>
+
+        <div id="calendar" class="mt-3"></div>
+
+        <h4 class="mt-4">📦 
+    <span id="selected-week">
+        {% if selected_filter == "unshipped" %}
+            미출고 제품 조회 결과 
+        {% elif selected_filter == "shipped" %}
+            출고 제품 조회 결과 
+        {% elif selected_filter == "all" %}
+            모든 제품 조회 결과 
+        {% elif search_value %}
+            "{{ search_value }}" 검색 결과
+        {% elif start_date and end_date %}
+            {{ start_date }} ~ {{ end_date }}
+        {% else %}
+            주간 범위를 선택해주세요
+        {% endif %}
+    </span>
+</h4>
+
+{% set total_pages = total_pages if total_pages is defined else 1 %}
+{% set page = page if page is defined else 1 %}
+
+{% if orders %}
+    <table class="table table-bordered text-center">
+        <thead class="thead-light">
+            <tr>
+            <th style="width: 120px;">입고 날짜</th>
+            <th style="width: 150px;">Dell 주문 번호</th>
+            <th style="width: 170px;">구매 주문 번호</th>
+            <th style="width: 300px;">제품 설명</th>
+            <th style="width: 60px;">수량</th>
+            <th style="width: 100px;">출고처리</th>
+			 <th style="width: 200px;">비고</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+                {% for product in order.products %}
+                    <tr>
+                        {% if loop.first %}
+                            <td rowspan="{{ order.products|length }}">{{ order.created_at }}</td>
+                            <td rowspan="{{ order.products|length }}">{{ order.order_number }}</td>
+                            <td rowspan="{{ order.products|length }}">{{ order.purchase_order_number }}</td>
+                        {% endif %}
+                        <td>{{ product.description }}</td>
+                        <td>{{ product.itemQuantity }}</td>
+                        <td class="text-center">
+                            <input type="checkbox" class="shipped-checkbox" 
+                                   data-order-number="{{ order.order_number }}"
+                                   {% if order.shipped == 1 %} checked {% endif %}>
+                        </td>
+						<td>
+                    <input type="text" class="form-control memo-input" 
+                           data-order-number="{{ order.order_number }}"
+                           value="{{ order.memo or '' }}"
+                           placeholder="메모 입력">
+						</td>
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- ✅ 페이징 버튼 추가 -->
+    {% if total_pages > 1 %}
+    <div class="text-center mt-4">
+        {% if page > 1 %}
+            <a href="{{ request.path }}?field={{ selected_field }}&value={{ search_value }}&page={{ page-1 }}" class="btn btn-primary">« 이전</a>
+        {% endif %}
+        
+        <span class="mx-3">페이지 {{ page }} / {{ total_pages }}</span>
+        
+        {% if page < total_pages %}
+            <a href="{{ request.path }}?field={{ selected_field }}&value={{ search_value }}&page={{ page+1 }}" class="btn btn-primary">다음 »</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+{% else %}
+    <div class="alert alert-warning text-center">
+        선택한 범위에 저장된 주문 데이터가 없습니다.
+    </div>
+{% endif %}
+
+
+        <div class="text-center mt-4">
+            <a href="/" class="btn btn-primary">홈으로</a>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        firstDay: 0,  // 주의 시작을 일요일로 설정
+        selectable: true,
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek'
+        },
+        select: function(info) {
+            let startDate = moment(info.start).format('YYYY-MM-DD');
+            let endDate = moment(info.end).subtract(1, 'days').format('YYYY-MM-DD');
+
+            // "선택된 주차" 텍스트 업데이트
+            document.getElementById("selected-week").innerText = `${startDate} ~ ${endDate}`;
+            
+            // 서버로 날짜 범위 전송
+            window.location.href = `/order_list?start_date=${startDate}&end_date=${endDate}`;
+        },
+        events: [
+            {% for date in available_dates %}
+            {
+                title: "📦 주문 있음",
+                start: "{{ date }}",
+                allDay: true
+            },
+            {% endfor %}
+        ]
+    });
+
+    calendar.render();
+});
+
+function fetchOrdersByDate() {
+    let manualDate = document.getElementById("manual-date").value;
+    if (manualDate) {
+        let startDate = moment(manualDate).startOf('week').format('YYYY-MM-DD');
+        let endDate = moment(manualDate).endOf('week').format('YYYY-MM-DD');
+        
+        // "선택된 주차" 텍스트 업데이트
+        document.getElementById("selected-week").innerText = `${startDate} ~ ${endDate}`;
+
+        // 서버로 날짜 범위 전송
+        window.location.href = `/order_list?start_date=${startDate}&end_date=${endDate}`;
+    } else {
+        alert("날짜를 입력하세요.");
+    }
+}
+$(document).ready(function() {
+    // ✅ 미출고 제품 조회
+    $("#filter-unshipped").on("click", function() {
+        window.location.href = "/search_unshipped";
+    });
+
+    // ✅ 출고 제품 조회
+    $("#filter-shipped").on("click", function() {
+        window.location.href = "/search_shipped";
+    });
+
+    // ✅ 모든 제품 조회
+    $("#filter-all").on("click", function() {
+        window.location.href = "/search_all";
+    });
+
+    // ✅ 출고 체크박스 변경 시 AJAX 요청
+    $(".shipped-checkbox").on("change", function() {
+        let orderNumber = $(this).data("order-number");
+        let shipped = $(this).is(":checked");
+
+        $.ajax({
+            url: "/update_shipped_status",
+            type: "POST",
+            data: { order_number: orderNumber, shipped: shipped },
+            success: function(response) {
+                console.log(response.message);
+            },
+            error: function(xhr, status, error) {
+                console.error("출고 상태 업데이트 실패:", error);
+                alert("출고 상태 업데이트 중 오류가 발생했습니다.");
+            }
+        });
+    });
+});
+
+$(document).ready(function() {
+    let params = new URLSearchParams(window.location.search);
+    let field = params.get("field") || "";
+    let value = params.get("value") || "";
+
+    $(".pagination-link").each(function() {
+        let url = $(this).attr("href");
+        $(this).attr("href", url + "&field=" + field + "&value=" + value);
+    });
+});
+
+$(document).ready(function() {
+    $("#search-form").on("submit", function(event) {
+        let searchValue = $("#search-value").val().trim();
+        
+        if (searchValue === "") {
+            $("#search-warning").show();  // ✅ 경고 메시지 표시
+            event.preventDefault();  // ✅ 폼 제출 방지
+        }
+    });
+
+    // ✅ 사용자가 입력하면 경고 메시지 숨김
+    $("#search-value").on("input", function() {
+        $("#search-warning").hide();
+    });
+});
+
+<!-- ✅ JavaScript 아래에 추가 -->
+$(document).on("input", ".memo-input", function() {
+    let input = $(this);
+    let orderNumber = input.data("order-number");
+    let memo = input.val();
+
+    $.ajax({
+        url: "/update_memo",
+        type: "POST",
+        data: {
+            order_number: orderNumber,
+            memo: memo
+        },
+        success: function(response) {
+            console.log("메모 저장 성공:", response.message);
+        },
+        error: function(xhr, status, error) {
+            console.error("메모 저장 실패:", error);
+            alert("메모 저장 중 오류 발생");
+        }
+    });
+});
+</script>
+</body>
+</html>

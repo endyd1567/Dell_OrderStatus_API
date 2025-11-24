@@ -1,0 +1,7 @@
+Flask
+werkzeug
+gunicorn
+python-dotenv
+requests
+boto3
+botocore

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메일 보내기</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+	<div class="container">
+        <h2>주문 데이터</h2>
+        {% if orders %}
+            <div class="table-responsive">
+			<p id="order-info"></p> <!-- 날짜 정보를 표시할 요소 -->
+<table style="border-collapse: collapse; width: 200%; text-align: center; table-layout: fixed;">
+    <thead style="background-color: #d9e2f3; color: black; font-weight: bold;">
+        <tr>
+            <th style="border: 1px solid black; padding: 4px; width: 50%;">Dell 주문 번호</th>
+            <th style="border: 1px solid black; padding: 4px; width: 50%;">구매 주문 번호</th>
+            <th style="border: 1px solid black; padding: 4px; width: 60%;">제품 설명 / 오류 정보</th>
+            <th style="border: 1px solid black; padding: 4px; width: 20%;">수량</th>
+            <th style="border: 1px solid black; padding: 4px; width: 20%;">Box</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for order in orders %}
+            {% if order.error %}
+                <tr class="table-danger">
+                    <td>{{ order.order_number }}</td>
+                    <td colspan="4">
+                        <strong>처리 실패:</strong> {{ order.error }}
+                    </td>
+                </tr>
+            {% else %}
+                {% set rowspan = order.products|length if order.products else 1 %}
+                {% for product in order.products or [{'description': '제품 정보 없음', 'itemQuantity': 'N/A'}] %}
+                    <tr>
+                        {% if loop.first %}
+                            <td style="border: 1px solid black; padding: 4px;" rowspan="{{ rowspan }}">{{ order.order_number }}</td>
+                            <td style="border: 1px solid black; padding: 4px;" rowspan="{{ rowspan }}">{{ order.purchase_order_number }}</td>
+                        {% endif %}
+                        <td style="border: 1px solid black; padding: 4px;">{{ product.description }}</td>
+                        <td>{{ product.itemQuantity }}</td>
+                        {% if loop.first %}
+                            <td style="border: 1px solid black; padding: 4px;" rowspan="{{ rowspan }}">{{ order.box }}</td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            {% endif %}
+        {% endfor %}
+    </tbody>
+</table>
+			<p>감사합니다.</p>
+            </div>
+        {% elif message %}
+            <div class="alert alert-warning" role="alert">
+                {{ message }}
+            </div>
+        {% else %}
+            <div class="alert alert-info" role="alert">
+                데이터가 없습니다. 다시 시도해주세요.
+            </div>
+        {% endif %}
+    </div>
+    <div class="container text-center mt-5">
+        <!-- 메일 보내기 버튼 -->
+        <button onclick="confirmAndSendMail()" class="btn btn-primary">메일 보내기</button>
+        <!-- 기존 기능 -->
+        <br><br>
+        <button onclick="copyTable()" class="btn btn-secondary">주문 데이터 복사</button>
+        <br><br>
+        <div class="text-center mt-4">
+            <a href="/" class="btn btn-primary">홈으로</a>
+        </div>
+    </div>
+	
+<style>
+	table {
+		border-collapse: collapse;
+	}
+
+	th, td {
+		border: 1px solid #000000;/
+		padding: 4px;
+		text-align: center; /* 텍스트 중앙 정렬 */
+	}
+	
+	/* th 줄바꿈을 방지 */
+    th {
+        white-space: nowrap; /* 줄바꿈 방지 */
+		background-color: #d9e2f3; /* 헤더 배경색 (밝은 파란색) */
+		color: black; /* 텍스트 색상 */
+		font-weight: bold; /* 굵은 텍스트 */
+    }
+	
+    /* 테이블 셀(td): 줄바꿈 허용 */
+    td {
+        white-space: normal; /* 줄바꿈 허용 */
+        word-wrap: break-word; /* 긴 단어가 있을 경우 자동 줄바꿈 */
+		color: black; /* 텍스트 색상 */
+    }
+</style>
+
+    <script>
+        function copyTable() {
+            const tableElement = document.querySelector('.table-responsive');
+            if (!tableElement) {
+                alert('테이블 데이터가 없습니다.');
+                return;
+            }
+            
+            const range = document.createRange();
+            range.selectNode(tableElement);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            try {
+                document.execCommand('copy');
+                alert('주문 데이터가 복사되었습니다.');
+            } catch (err) {
+                alert('복사에 실패했습니다. 수동으로 복사해주세요.');
+            } finally {
+                window.getSelection().removeAllRanges();
+            }
+        }
+
+        function copyAndSendMail() {
+            const today = new Date();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            
+			// 요일 배열 (일요일부터 시작)
+			const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+			const dayOfWeek = weekdays[today.getDay()];
+
+			const subject = `${month}월 ${day}일 (${dayOfWeek}) 사무실 입고 장비 리스트 전달 드립니다.`
+
+            const tableElement = document.querySelector('.table-responsive');
+            if (!tableElement) {
+                alert('테이블 데이터가 없습니다.');
+                return;
+            }
+
+            const range = document.createRange();
+            range.selectNode(tableElement);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            try {
+                document.execCommand('copy');
+                alert('주문 데이터가 복사되었습니다. 메일 작성 창이 열립니다.');
+
+				const mailToLink = `mailto:all@espice.co.kr?subject=${subject}`;
+                window.location.href = mailToLink;
+            } catch (err) {
+                alert('복사에 실패했습니다. 수동으로 복사해주세요.');
+            } finally {
+                window.getSelection().removeAllRanges();
+            }
+        }
+		
+		// 페이지 로드 시 날짜 정보를 표시
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+
+            // 요일 배열 (일요일부터 시작)
+            const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+            const dayOfWeek = weekdays[today.getDay()];
+
+            const orderInfo = `${month}월 ${day}일 (${dayOfWeek}) 사무실 입고 장비 리스트 전달 드립니다.`;
+
+            const orderInfoElement = document.getElementById('order-info');
+            if (orderInfoElement) {
+                orderInfoElement.textContent = orderInfo;
+            }
+        });
+		
+    document.addEventListener("DOMContentLoaded", function () {
+        let rows = document.querySelectorAll("tbody tr");
+        let lastOrderNumber = null;
+        let currentColor = "white"; // 첫 번째 배경색
+
+        rows.forEach(row => {
+            let orderNumberCell = row.querySelector("td[rowspan]"); // rowspan이 있는 첫 번째 셀 찾기
+
+            if (orderNumberCell) {
+                let currentOrderNumber = orderNumberCell.innerText.trim();
+
+                if (currentOrderNumber !== lastOrderNumber) {
+                    // order_number가 바뀌면 색상 변경
+                    currentColor = currentColor === "white" ? "#f2f2f2" : "white";
+                    lastOrderNumber = currentOrderNumber;
+                }
+            }
+
+            row.style.backgroundColor = currentColor; // 모든 관련 행에 동일한 색 적용
+        });
+    });
+	
+	function saveOrdersAndSendMail() {
+        fetch('/save_orders', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            copyAndSendMail();  // 기존 메일 보내기 함수 호출
+        })
+        .catch(error => alert("저장 실패: " + error));
+    }
+	
+	function confirmAndSendMail() {
+    const userConfirmed = confirm("서버에 데이터가 저장됩니다. 저장하시겠습니까?");
+    if (userConfirmed) {
+        // 사용자가 "예"를 선택한 경우: 데이터 저장 후 메일 발송
+        saveOrdersAndSendMail();
+    } else {
+        // 사용자가 "아니오"를 선택한 경우: 메일만 발송
+        copyAndSendMail();
+    }
+}
+
+</script>
+</body>
+</html>

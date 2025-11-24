@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>입고 장비 등록</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f9fafb;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .card {
+            margin-top: 30px;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .form-section-title {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .file-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #fff;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+        .file-list button {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+        #progress-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f1f5f9;
+            border-left: 4px solid #0d6efd;
+            border-radius: 5px;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card p-4">
+            <h4 class="text-center mb-4">📦 박스 라벨 업로드 및 수동 입력</h4>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <div id="progress-container" class="mb-3">
+                  <h5 class="form-section-title">처리 결과</h5>
+                  {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                      {{ message }}
+                      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+
+            <form method="post" action="/process_order" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="file-input" class="form-section-title">라벨 사진 업로드
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#photoFormatModal">
+                            ? 사진 양식
+                        </button>
+                    </label>
+                    <input type="file" name="files[]" multiple id="file-input" class="form-control" onchange="updateFileList()">
+                    <ul id="file-list" class="file-list mt-3"></ul>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-section-title">수동 주문 번호 입력</label>
+                    <div id="order-number-container" class="d-flex flex-column gap-2">
+                        <div class="d-flex gap-2">
+                            <input type="text" name="manual_order_numbers[]" class="form-control" placeholder="주문 번호 입력">
+                            <select name="box[]" class="form-select" style="max-width: 120px;">
+                                <option value="" disabled selected>박스</option>
+                                {% for i in range(1, 101) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary mt-2" onclick="addOrderNumberField()">+ 주문 번호 추가</button>
+                </div>
+
+                
+                <div class="d-grid mt-4 gap-2">
+                    <input type="submit" id="submit-button" value="제출" class="btn btn-primary">
+                    <div id="loading-spinner" class="d-none text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">처리 중입니다. 잠시만 기다려주세요...</p>
+                    </div>
+                    <!-- This container will be filled by JavaScript -->
+                    <div id="error-container" class="text-center mt-3"></div>
+				</div>
+
+			<!-- ✅ 관리자 호출 버튼 추가 -->
+			<div class="text-center mt-4 d-flex justify-content-center gap-2">
+				<a href="/" class="btn btn-outline-dark">🏠 홈으로</a>
+				<button type="button" class="btn btn-outline-danger bg-white" onclick="notifyAdmin()">🛠️ 에러 발생 시</button>
+			</div>
+				
+            </form>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <img id="modalImage" src="" alt="미리보기" class="img-fluid">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Format Help Modal -->
+    <div class="modal fade" id="photoFormatModal" tabindex="-1" aria-labelledby="photoFormatModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="photoFormatModalLabel">📷 업로드 사진 양식 안내</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>아래 두 가지 유형의 사진을 업로드할 수 있습니다.</p>
+                    <hr>
+                    <div class="row text-center">
+                        <div class="col-md-6">
+                            <h6>1. 박스 라벨 </h6>
+                            <p class="text-muted">박스에 부착된 Dell 라벨을 촬영하여 업로드합니다.<br> 하나의 주문번호를 자동으로 인식합니다.</p>
+                            <img src="{{ url_for('static', filename='images/box_label_example.png') }}" class="img-fluid border rounded" alt="박스 라벨 예시">
+                        </div>
+                        <div class="col-md-6">
+				<br>
+                            <h6>2. 납품 확인서</h6>
+                            <p class="text-muted">여러 주문이 포함된 납품 확인서를 업로드합니다.<br> 문서 내의 모든 주문번호를 한 번에 인식합니다.</p>
+                            <img src="{{ url_for('static', filename='images/delivery_confirmation_example.png') }}" class="img-fluid border rounded" alt="납품 확인서 예시">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <script>
+        $('form').on('submit', function(event) {
+            event.preventDefault(); // Prevent default form submission
+
+            const files = $('#file-input').get(0).files.length;
+            const manualEntries = $('input[name="manual_order_numbers[]"]').filter(function() {
+                return $(this).val().trim() !== '';
+            }).length;
+
+            if (files === 0 && manualEntries === 0) {
+                alert("업로드할 파일이나 수동으로 입력한 주문 번호가 없습니다.");
+                return;
+            }
+
+            // Clear previous errors and show spinner
+            $('#error-container').empty();
+            $('#submit-button').prop('disabled', true);
+            $('#loading-spinner').removeClass('d-none');
+
+            const formData = new FormData(this);
+
+            fetch('/process_order', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide spinner
+                $('#submit-button').prop('disabled', false);
+                $('#loading-spinner').addClass('d-none');
+
+                if (data.status === 'success') {
+                    window.location.href = data.redirect_url;
+                } else if (data.status === 'error') {
+                    const errorContainer = $('#error-container');
+                    // Clear previous errors and display new ones
+                    errorContainer.html('');
+                    if (data.errors) {
+                        data.errors.forEach(error => {
+                            errorContainer.append(`<div class="alert alert-danger" role="alert">${error}</div>`);
+                        });
+                    } else if (data.message) {
+                        errorContainer.append(`<div class="alert alert-danger" role="alert">${data.message}</div>`);
+                    }
+                } else {
+                    const errorContainer = $('#error-container');
+                    errorContainer.html(`<div class="alert alert-danger" role="alert">${data.message || '알 수 없는 오류가 발생했습니다.'}</div>`);
+                }
+            })
+            .catch(error => {
+                console.error('Submission error:', error);
+                // Hide spinner and show a generic error
+                $('#submit-button').prop('disabled', false);
+                $('#loading-spinner').addClass('d-none');
+                const errorContainer = $('#error-container');
+                errorContainer.html('<div class="alert alert-danger" role="alert">서버와 통신 중 오류가 발생했습니다.</div>');
+            });
+        });
+
+        let uploadedFiles = [];
+
+        function updateFileList() {
+    const fileInput = document.getElementById('file-input');
+    const fileList = document.getElementById('file-list');
+    fileList.innerHTML = ''; // 기존 리스트 초기화
+
+    for (let i = 0; i < fileInput.files.length; i++) {
+        const file = fileInput.files[i];
+        uploadedFiles.push(file);
+
+        const listItem = document.createElement('li');
+        listItem.style.display = 'flex';
+        listItem.style.justifyContent = 'space-between';
+        listItem.style.alignItems = 'center';
+        listItem.style.padding = '10px';
+        listItem.style.border = '1px solid #ddd';
+        listItem.style.borderRadius = '5px';
+        listItem.style.marginBottom = '5px';
+        listItem.style.backgroundColor = '#f9f9f9';
+
+        const fileNameSpan = document.createElement('span');
+        fileNameSpan.textContent = file.name;
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '10px'; // 버튼 간 간격 추가
+
+        // 미리보기 버튼
+        const previewButton = document.createElement('button');
+        previewButton.textContent = '미리보기';
+		previewButton.type = 'button';  // type="button"으로 설정하여 폼 제출 방지
+        previewButton.style.backgroundColor = '#007bff';
+        previewButton.style.color = 'white';
+        previewButton.style.border = 'none';
+        previewButton.style.padding = '5px 10px';
+        previewButton.style.borderRadius = '5px';
+        previewButton.style.cursor = 'pointer';
+        previewButton.onclick = (event) => {
+            event.preventDefault();  // 폼 제출 방지
+            previewFile(file);
+        };
+
+        // 삭제 버튼
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '삭제';
+		deleteButton.type = 'button';  // type="button"으로 설정하여 폼 제출 방지
+        deleteButton.style.backgroundColor = '#dc3545';
+        deleteButton.style.color = 'white';
+        deleteButton.style.border = 'none';
+        deleteButton.style.padding = '5px 10px';
+        deleteButton.style.borderRadius = '5px';
+        deleteButton.style.cursor = 'pointer';
+        deleteButton.onclick = (event) => {
+			event.preventDefault();  // 폼 제출 방지
+            removeFile(file.name);
+        };
+
+        buttonContainer.appendChild(previewButton);
+        buttonContainer.appendChild(deleteButton);
+        listItem.appendChild(fileNameSpan);
+        listItem.appendChild(buttonContainer);
+        fileList.appendChild(listItem);
+    }
+}
+
+function removeFile(fileName) {
+    const fileInput = document.getElementById('file-input');
+    const fileList = document.getElementById('file-list');
+
+    // uploadedFiles에서 첫 번째로 매칭된 파일 제거
+    const fileIndex = uploadedFiles.findIndex(file => file.name === fileName);
+    if (fileIndex !== -1) {
+        uploadedFiles.splice(fileIndex, 1); // 배열에서 해당 파일 제거
+    }
+
+    // 새로운 파일 리스트를 다시 렌더링
+    fileList.innerHTML = '';
+    uploadedFiles.forEach(file => {
+        const listItem = document.createElement('li');
+        const fileNameSpan = document.createElement('span');
+        fileNameSpan.textContent = file.name;
+
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '10px';
+
+        const previewButton = document.createElement('button');
+        previewButton.textContent = '미리보기';
+        previewButton.type = 'button';
+        previewButton.style.backgroundColor = '#007bff';
+        previewButton.style.color = 'white';
+        previewButton.style.border = 'none';
+        previewButton.style.padding = '5px 10px';
+        previewButton.style.borderRadius = '5px';
+        previewButton.style.cursor = 'pointer';
+        previewButton.onclick = () => previewFile(file);
+
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '삭제';
+        deleteButton.type = 'button';
+        deleteButton.style.backgroundColor = '#dc3545';
+        deleteButton.style.color = 'white';
+        deleteButton.style.border = 'none';
+        deleteButton.style.padding = '5px 10px';
+        deleteButton.style.borderRadius = '5px';
+        deleteButton.style.cursor = 'pointer';
+        deleteButton.onclick = () => removeFile(file.name);
+
+        buttonContainer.appendChild(previewButton);
+        buttonContainer.appendChild(deleteButton);
+        listItem.appendChild(fileNameSpan);
+        listItem.appendChild(buttonContainer);
+        fileList.appendChild(listItem);
+    });
+
+    // fileInput 값 재설정
+    const dataTransfer = new DataTransfer();
+    uploadedFiles.forEach(file => dataTransfer.items.add(file));
+    fileInput.files = dataTransfer.files;
+}
+
+
+function previewFile(file) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(event) {
+                const modalImage = document.getElementById('modalImage');
+                modalImage.src = event.target.result;  // 모달의 이미지 src 설정
+                $('#imagePreviewModal').modal('show');  // 모달 표시
+            };
+            fileReader.readAsDataURL(file);
+        }
+	
+    function addOrderNumberField() {
+    const container = document.getElementById('order-number-container');
+
+    const fieldWrapper = document.createElement('div');
+    fieldWrapper.className = 'd-flex align-items-center mt-2';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.name = 'manual_order_numbers[]';
+    input.placeholder = '추가 주문 번호 입력';
+    input.style.flex = '1';
+	input.style.width = '100px';  // ✅ 크기 줄이기
+
+    const select = document.createElement('select');
+    select.name = 'box[]';
+    select.className = 'form-control ml-2';
+    select.style.width = '80px';
+
+    for (let i = 1; i <= 100; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.text = i;
+        select.appendChild(option);
+    }
+
+    fieldWrapper.appendChild(input);
+    fieldWrapper.appendChild(select);
+    container.appendChild(fieldWrapper);
+}
+
+function notifyAdmin() {
+    fetch('/notify_admin', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => alert(data.message || '관리자에게 요청이 전송되었습니다.'))
+        .catch(err => alert('전송 실패: ' + err.message));
+}
+</script>
