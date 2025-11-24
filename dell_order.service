@@ -1,0 +1,20 @@
+[Unit]
+Description=Dell Order Service
+After=multi-user.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/srv/Dell_OrderStatus_API/Dell_API_OrderStatus
+ExecStart=/srv/Dell_OrderStatus_API/Dell_API_OrderStatus/.venv/bin/python /srv/Dell_OrderStatus_API/Dell_API_OrderStatus/app.py
+User=dell_order
+Group=dell_order
+Type=idle
+Restart=always
+RestartSec=15
+RestartPreventExitStatus=0
+TimeoutStopSec=10
+TimeoutSec=15min
+
+[Install]
+WantedBy=multi-user.target
